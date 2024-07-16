@@ -1,0 +1,5 @@
+start a ros node:
+rosrun ohm_reactive_rll wall_follow_node.py
+
+list publishers:
+rostopic list

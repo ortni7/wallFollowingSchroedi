@@ -1,0 +1,7 @@
+set(ohm_mecanum_sim_SETUP_PY_SETUP_MODULE "distutils.core")
+set(ohm_mecanum_sim_SETUP_PY_VERSION "0.0.0")
+set(ohm_mecanum_sim_SETUP_PY_SCRIPTS "scripts/ohm_mecanum_sim_node.py")
+set(ohm_mecanum_sim_SETUP_PY_PACKAGES "ohm_mecanum_sim")
+set(ohm_mecanum_sim_SETUP_PY_PACKAGE_DIRS "src/ohm_mecanum_sim")
+set(ohm_mecanum_sim_SETUP_PY_MODULES "")
+set(ohm_mecanum_sim_SETUP_PY_MODULE_DIRS "")

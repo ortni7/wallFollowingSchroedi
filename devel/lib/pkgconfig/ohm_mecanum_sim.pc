@@ -1,0 +1,8 @@
+prefix=/home/nick/catkin_ws/devel
+
+Name: ohm_mecanum_sim
+Description: Description of ohm_mecanum_sim
+Version: 0.0.0
+Cflags: -I/home/nick/catkin_ws/devel/include
+Libs: -L${prefix}/lib 
+Requires: message_runtime

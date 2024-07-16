@@ -1,0 +1,8 @@
+prefix=/home/nick/catkin_ws/devel
+
+Name: ohm_reactive_rll
+Description: Description of ohm_reactive_rll
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 
