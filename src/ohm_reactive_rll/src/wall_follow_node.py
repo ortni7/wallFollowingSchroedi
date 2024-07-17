@@ -14,8 +14,12 @@ class WallFollower:
         # Create a subscriber to the laser scanner data
         self.laser_sub = rospy.Subscriber('/robot1/laser', LaserScan, self.laser_callback)
 
-        self.speed_default = 1
+        # Speed controll constants
+        self.speed_default                  = 1
+        self.speed_damping_threshhold       = 2 # distance in meters
+        self.speed_stop_threshhold          = 1
 
+        # geometry vars for PID calculation input
         self.distance_forward               = None  # distance to the wall
         self.distance_30_degrees_right      = None  # distance to the wall
         self.distance_right_wall            = None  # distance of laser 90 deg to the right
@@ -84,13 +88,13 @@ class WallFollower:
         if self.distance_forward is None:
             return self.speed_default
         
-        if self.distance_forward > 1.0:
+        if   self.distance_forward > self.speed_damping_threshhold:
             return self.speed_default
-        elif self.distance_forward < 0.2:
+
+        elif self.distance_forward < self.speed_stop_threshhold:
             return 0.0
         else:
-            # Exponential slowdown
-            speed = self.speed_default * (self.distance_forward / 1.0) ** 2
+            speed = self.speed_default * self.distance_forward / self.speed_damping_threshhold
             return speed
 
 
@@ -116,7 +120,6 @@ class WallFollower:
                                                 )
 
         # rospy.loginfo("angle_wall_Rlaser: %f, distance_betweenLasers: %f", math.degrees(self.angle_wall_Rlaser), self.distance_betweenLasers)
-        rospy.loginfo("dist2Wall: %f", self.distance_right_wall)
 
         # Compute control efforts
         control_effort_angle = self.compute_pid_control('angle')
@@ -130,6 +133,7 @@ class WallFollower:
         twist.linear.x = self.calculate_speed()
         twist.angular.z = combined_control_effort
         self.cmd_vel_pub.publish(twist)
+        rospy.loginfo("dist2Wall: %f, distForward: %f, speed: %f", self.distance_right_wall, self.distance_forward, self.calculate_speed())
     
     def run(self):
         rospy.spin()
