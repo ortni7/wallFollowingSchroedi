@@ -22,7 +22,10 @@ class WallFollower:
         # Set the rate at which to run the loop
         self.rate = rospy.Rate(10)  # 10 Hz
     
-    def laser_callback(self, data):
+    def laser_callback(self, data: List[]):
+        forwardDistance = data.len()/2
+        print(f"x distance: {forwardDistance}, datalen {data.len()}")
+
         # Get the distance to the closest object in front of the robot
         front_distance = min(min(data.ranges[0:10]), min(data.ranges[-10:]))  # Front distance
         
@@ -43,3 +46,13 @@ class WallFollower:
         
         # Publish the Twist message
         self.cmd_vel_pub.publish(twist)
+    
+    def run(self):
+        rospy.spin()
+
+if __name__ == '__main__':
+    try:
+        wall_follower = WallFollower()
+        wall_follower.run()
+    except rospy.ROSInterruptException:
+        pass
