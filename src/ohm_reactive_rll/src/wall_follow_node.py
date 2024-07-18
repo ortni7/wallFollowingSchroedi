@@ -15,14 +15,22 @@ class WallFollower:
         self.laser_sub = rospy.Subscriber('/robot1/laser', LaserScan, self.laser_callback)
 
         # Speed controll constants
-        self.speed_default                  = 1
+        self.speed_default                  = 0.5
         self.speed_damping_threshhold       = 2 # distance in meters
         self.speed_stop_threshhold          = 1
+
+        # if the robot is far away from the right wall, it turns right. This var specifies after which distance he turns right again
+        # Laser publish rate, 29 Hz:
+        # rostopic hz /robot1/laser
+        self._2nd_r_turn_distance_before     =  0.5  # Could be not 100% accurate because of speed_damping
+        self._2nd_r_turn_ticks_before        = self._2nd_r_turn_distance_before / (self.speed_default * 1/29)   # / way for 1 tick, publishes with 30 Hz
+        self._2nd_r_turn_current_ticks       = 0
 
         # geometry vars for PID calculation input
         self.distance_forward               = None  # distance to the wall
         self.distance_30_degrees_right      = None  # distance to the wall
         self.distance_right_wall            = None  # distance of laser 90 deg to the right
+        self.distance_left_wall             = None
         self.distance_betweenLasers         = None  # distance between 30_degrees_right laser and right_wall (side of the triangle on the wall)
         self.angle_wall_Rlaser              = None  # angle between dis_betweenLasers and dis_right_wall
 
@@ -30,18 +38,16 @@ class WallFollower:
         self.distance_right_wall_desired    = 1.0
 
         # PID constants for angle
-        self.kp_angle = 1.0
-        self.ki_angle = 0.01
-        self.kd_angle = 0.05
+        self.kp_angle = 0.8
+        self.ki_angle = 0#0.01
 
         # PID state variables for angle
         self.previous_error_angle = 0.0
         self.integral_angle = 0.0
 
         # PID constants for distance
-        self.kp_distance = 0.1
-        self.ki_distance = 0.0
-        self.kd_distance = 0.0
+        self.kp_distance = 0.7
+        self.ki_distance = 0#0.01
 
         # PID state variables for distance
         self.previous_error_distance = 0.0
@@ -53,30 +59,30 @@ class WallFollower:
     def deg_to_rad(self, deg):
         return deg * (3.14159 / 180)
 
-    def calculate_control_effort(self, error, integral, previous_error, kp, ki, kd):
+    def calculate_control_effort(self, error, integral, previous_error, kp, ki):
         integral += error
         integral = max(min(integral, 10), -10)  # Clamp the integral term to avoid windup
 
         derivative = error - previous_error
 
-        control_effort = kp * error + ki * integral + kd * derivative
+        control_effort = kp * error + ki * integral
         control_effort = max(min(control_effort, 1.0), -1.0)  # Clamp control effort
 
         return control_effort, integral
     
-    def compute_pid_control(self, control_type):
+    def compute_pi_control(self, control_type):
         if control_type == 'angle':
             error = self.angle_wall_Rlaser_desired - self.angle_wall_Rlaser
             control_effort, self.integral_angle = self.calculate_control_effort(
                 error, self.integral_angle, self.previous_error_angle, 
-                self.kp_angle, self.ki_angle, self.kd_angle
+                self.kp_angle, self.ki_angle
             )
             self.previous_error_angle = error
         elif control_type == 'distance':
             error = self.distance_right_wall_desired - self.distance_right_wall
             control_effort, self.integral_distance = self.calculate_control_effort(
                 error, self.integral_distance, self.previous_error_distance, 
-                self.kp_distance, self.ki_distance, self.kd_distance
+                self.kp_distance, self.ki_distance
             )
             self.previous_error_distance = error
         else:
@@ -121,19 +127,30 @@ class WallFollower:
 
         # rospy.loginfo("angle_wall_Rlaser: %f, distance_betweenLasers: %f", math.degrees(self.angle_wall_Rlaser), self.distance_betweenLasers)
 
-        # Compute control efforts
-        control_effort_angle = self.compute_pid_control('angle')
-        control_effort_distance = self.compute_pid_control('distance')
+        control_effort_angle = self.compute_pi_control('angle')
+        control_effort_distance = self.compute_pi_control('distance')
 
-        # Combine control efforts
         combined_control_effort = control_effort_angle + control_effort_distance
         combined_control_effort = max(min(combined_control_effort, 1.0), -1.0)  # Clamp combined control effort
 
         twist = Twist()
         twist.linear.x = self.calculate_speed()
-        twist.angular.z = combined_control_effort
+
+        if self.distance_right_wall > 1.5 and self._2nd_r_turn_ticks_before:
+            twist.angular.z = -0.45
+            self._2nd_r_turn_current_ticks = 0
+
+        else:
+            twist.angular.z = combined_control_effort
+
+        # prevent deadlock, turn in the direction with more space
+        if self.distance_forward > 0.9 and self.distance_forward < 1.1 and self.deg_to_rad(self.angle_wall_Rlaser) > 89 and self.deg_to_rad(self.angle_wall_Rlaser) < 91:
+           pass
+
+        
         self.cmd_vel_pub.publish(twist)
-        rospy.loginfo("dist2Wall: %f, distForward: %f, speed: %f", self.distance_right_wall, self.distance_forward, self.calculate_speed())
+        #rospy.loginfo("ticksBef2ndRun: %d", self._2nd_r_turn_ticks_before)
+        rospy.loginfo("dist2Wall: %f, distForward: %f, speed: %f, angle: %f", self.distance_right_wall, self.distance_forward, self.calculate_speed(), math.degrees(self.angle_wall_Rlaser))
     
     def run(self):
         rospy.spin()
