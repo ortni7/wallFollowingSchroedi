@@ -10,6 +10,7 @@ class WallFollower:
         
         # Create a publisher to publish Twist messages to control the robot
         self.cmd_vel_pub = rospy.Publisher('/robot1/cmd_vel', Twist, queue_size=10)
+        self.laser_publish_freq             = 29    # rostopic hz /robot1/laser
         
         # Create a subscriber to the laser scanner data
         self.laser_sub = rospy.Subscriber('/robot1/laser', LaserScan, self.laser_callback)
@@ -21,10 +22,15 @@ class WallFollower:
 
         # if the robot is far away from the right wall, it turns right. This var specifies after which distance he turns right again
         # Laser publish rate, 29 Hz:
-        # rostopic hz /robot1/laser
-        self._2nd_r_turn_distance_before     =  0.5  # Could be not 100% accurate because of speed_damping
-        self._2nd_r_turn_ticks_before        = self._2nd_r_turn_distance_before / (self.speed_default * 1/29)   # / way for 1 tick, publishes with 30 Hz
-        self._2nd_r_turn_current_ticks       = 0
+        _2nd_r_turn_distance_before         =  0.5  # Could be not 100% accurate because of speed_damping
+        self._2nd_r_turn_ticks_before       = _2nd_r_turn_distance_before / (self.speed_default * 1/self.laser_publish_freq)   # / way for 1 tick, publishes with 30 Hz
+        self._2nd_r_turn_current_ticks      = 0
+
+        # Allow the robot only to turn 180° + a bit ° to the right at a time to prevent spinning in circles
+        self.current_rightTurn              = 0
+        right_turn_block_time               = 3 # in seconds
+        self.right_turn_block_ticks         = right_turn_block_time * self.laser_publish_freq
+        self.right_turn_block_current_tick  = self.right_turn_block_ticks + 1    # after a too strong right turn, turning right is blocked
 
         # geometry vars for PID calculation input
         self.distance_forward               = None  # distance to the wall
@@ -39,7 +45,7 @@ class WallFollower:
 
         # PID constants for angle
         self.kp_angle = 0.8
-        self.ki_angle = 0#0.01
+        self.ki_angle = 0.01
 
         # PID state variables for angle
         self.previous_error_angle = 0.0
@@ -47,7 +53,7 @@ class WallFollower:
 
         # PID constants for distance
         self.kp_distance = 0.7
-        self.ki_distance = 0#0.01
+        self.ki_distance = 0.01
 
         # PID state variables for distance
         self.previous_error_distance = 0.0
@@ -112,6 +118,9 @@ class WallFollower:
         
         index_90_degrees_right = int((self.deg_to_rad(-90) - data.angle_min) / data.angle_increment)
         self.distance_right_wall = data.ranges[index_90_degrees_right]
+
+        index_90_degrees_left = int((self.deg_to_rad(90) - data.angle_min) / data.angle_increment)
+        self.distance_left_wall = data.ranges[index_90_degrees_left]
         
         #rospy.loginfo("Forward Distance: %f, 30 Degrees Right Distance: %f, Right Wall Distance: %f",
         #              self.distance_forward, self.distance_30_degrees_right, self.distance_right_wall)
@@ -137,11 +146,36 @@ class WallFollower:
         twist.linear.x = self.calculate_speed()
 
         if self.distance_right_wall > 1.5 and self._2nd_r_turn_ticks_before:
-            twist.angular.z = -0.45
+            twist.angular.z = -1
             self._2nd_r_turn_current_ticks = 0
 
         else:
             twist.angular.z = combined_control_effort
+
+        # # if left turn
+        # if twist.angular.z > 0:
+        #     self.current_rightTurn = 0
+        # else:
+        #     self.current_rightTurn += twist.angular.z
+
+        # # to much right turn, block turning right, avoid spinning in circles
+        # if math.degrees(self.current_rightTurn) < -190:
+        #     self.right_turn_block_current_tick = 0
+        #     self.current_rightTurn = 0
+            
+
+        # if self.right_turn_block_current_tick < self.right_turn_block_ticks:
+        #     # if angle or distance controll turn left, use them to turn left
+        #     if control_effort_distance > 0:
+        #         twist.angular.z = control_effort_distance
+
+        #     elif control_effort_angle > 0:
+        #         twist.angular.z = control_effort_distance
+
+        #     else:
+        #         twist.angular.z = math.radians(20)
+
+        # self.right_turn_block_current_tick +=1
 
         # prevent deadlock, turn in the direction with more space
         if self.distance_forward > 0.9 and self.distance_forward < 1.1 and self.deg_to_rad(self.angle_wall_Rlaser) > 89 and self.deg_to_rad(self.angle_wall_Rlaser) < 91:
@@ -149,8 +183,9 @@ class WallFollower:
 
         
         self.cmd_vel_pub.publish(twist)
+        rospy.loginfo("curr-r-turn: %.2f r-block-curr-ticks: %d", math.degrees(self.current_rightTurn), self.right_turn_block_current_tick)
         #rospy.loginfo("ticksBef2ndRun: %d", self._2nd_r_turn_ticks_before)
-        rospy.loginfo("dist2Wall: %f, distForward: %f, speed: %f, angle: %f", self.distance_right_wall, self.distance_forward, self.calculate_speed(), math.degrees(self.angle_wall_Rlaser))
+        #rospy.loginfo("dist2Wall: %f, distForward: %f, speed: %f, angle: %f", self.distance_right_wall, self.distance_forward, self.calculate_speed(), math.degrees(self.angle_wall_Rlaser))
     
     def run(self):
         rospy.spin()
