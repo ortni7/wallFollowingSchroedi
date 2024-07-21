@@ -43,17 +43,17 @@ class WallFollower:
         self.angle_wall_Rlaser_desired      = self.deg_to_rad(90)
         self.distance_right_wall_desired    = 1.0
 
-        # PID constants for angle
-        self.kp_angle = 0.8
-        self.ki_angle = 0.01
+        # PID constants for angle               kinda working values
+        self.kp_angle = 0.8                   # 0.8
+        self.ki_angle = 0.01                  # 0.01
 
         # PID state variables for angle
         self.previous_error_angle = 0.0
         self.integral_angle = 0.0
 
         # PID constants for distance
-        self.kp_distance = 0.7
-        self.ki_distance = 0.01
+        self.kp_distance = 0.7               # 0.7
+        self.ki_distance = 0.01              # 0.01
 
         # PID state variables for distance
         self.previous_error_distance = 0.0
@@ -109,18 +109,15 @@ class WallFollower:
             speed = self.speed_default * self.distance_forward / self.speed_damping_threshhold
             return speed
 
+    def get_laser_from_angle(self, data, phi): # phi => degrees
+        index_phi_degrees = int((self.deg_to_rad(phi) - data.angle_min) / data.angle_increment)
+        return data.ranges[index_phi_degrees]
 
     def laser_callback(self, data):
         self.distance_forward = data.ranges[len(data.ranges) // 2]
-
-        index_30_degrees_right = int((self.deg_to_rad(-30) - data.angle_min) / data.angle_increment)
-        self.distance_30_degrees_right = data.ranges[index_30_degrees_right]
-        
-        index_90_degrees_right = int((self.deg_to_rad(-90) - data.angle_min) / data.angle_increment)
-        self.distance_right_wall = data.ranges[index_90_degrees_right]
-
-        index_90_degrees_left = int((self.deg_to_rad(90) - data.angle_min) / data.angle_increment)
-        self.distance_left_wall = data.ranges[index_90_degrees_left]
+        self.distance_30_degrees_right  = self.get_laser_from_angle(data, -30)
+        self.distance_right_wall        = self.get_laser_from_angle(data, -90)
+        self.distance_left_wall         = self.get_laser_from_angle(data,  90)
         
         #rospy.loginfo("Forward Distance: %f, 30 Degrees Right Distance: %f, Right Wall Distance: %f",
         #              self.distance_forward, self.distance_30_degrees_right, self.distance_right_wall)
@@ -179,13 +176,54 @@ class WallFollower:
 
         # prevent deadlock, turn in the direction with more space
         if self.distance_forward > 0.9 and self.distance_forward < 1.1 and self.deg_to_rad(self.angle_wall_Rlaser) > 89 and self.deg_to_rad(self.angle_wall_Rlaser) < 91:
-           pass
+            print("_____________________________________________________________________________________________")
+            print("|                                   FIXING DEADLOCK                                         |")
+            print("_____________________________________________________________________________________________")
+
+        ''' DEADLOCK PARAMS:
+        [INFO] [1721331384.618314]: dist2Wall: 1.496697, distForward: 0.820906, speed: 0.000000, angle: 31.118518
+        [INFO] [1721331384.644643]: dist2Wall: 1.512254, distForward: 0.829439, speed: 0.000000, angle: 30.646208
+        [INFO] [1721331384.671112]: dist2Wall: 1.512254, distForward: 0.829439, speed: 0.000000, angle: 30.646208
+        [INFO] [1721331384.706054]: dist2Wall: 1.481638, distForward: 0.812646, speed: 0.000000, angle: 31.621590
+        [INFO] [1721331384.735424]: dist2Wall: 1.481638, distForward: 0.812646, speed: 0.000000, angle: 31.621590
+        [INFO] [1721331384.762784]: dist2Wall: 1.498943, distForward: 0.822138, speed: 0.000000, angle: 31.047624
+        [INFO] [1721331384.804984]: dist2Wall: 1.498943, distForward: 0.822138, speed: 0.000000, angle: 31.047624
+        [INFO] [1721331384.837068]: dist2Wall: 1.519509, distForward: 0.833418, speed: 0.000000, angle: 30.439609
+        [INFO] [1721331384.870090]: dist2Wall: 1.519509, distForward: 0.833418, speed: 0.000000, angle: 30.439609
+        [INFO] [1721331384.900008]: dist2Wall: 1.480935, distForward: 0.812261, speed: 0.000000, angle: 31.646352
+        [INFO] [1721331384.928743]: dist2Wall: 1.480935, distForward: 0.812261, speed: 0.000000, angle: 31.646352
+        [INFO] [1721331384.955247]: dist2Wall: 1.496594, distForward: 0.820850, speed: 0.000000, angle: 31.121776
+        [INFO] [1721331384.980800]: dist2Wall: 1.496594, distForward: 0.820850, speed: 0.000000, angle: 31.121776
+        [INFO] [1721331385.009346]: dist2Wall: 1.511603, distForward: 0.829082, speed: 0.000000, angle: 30.665132
+        [INFO] [1721331385.036173]: dist2Wall: 1.511603, distForward: 0.829082, speed: 0.000000, angle: 30.665132
+        [INFO] [1721331385.063327]: dist2Wall: 1.479735, distForward: 0.811603, speed: 0.000000, angle: 31.688969
+        [INFO] [1721331385.091011]: dist2Wall: 1.479735, distForward: 0.811603, speed: 0.000000, angle: 31.688969
+        [INFO] [1721331385.118239]: dist2Wall: 1.494250, distForward: 0.819564, speed: 0.000000, angle: 31.196906
+        [INFO] [1721331385.144792]: dist2Wall: 1.494250, distForward: 0.819564, speed: 0.000000, angle: 31.196906
+        [INFO] [1721331385.173959]: dist2Wall: 1.509604, distForward: 0.827985, speed: 0.000000, angle: 30.72
+
+
+        [INFO] [1721332584.661313]: dist2Wall: 1.496759, distForward: 0.977456, speed: 0.000000, angle: 40.948053
+        [INFO] [1721332584.694144]: dist2Wall: 1.505328, distForward: 0.983051, speed: 0.000000, angle: 40.401205
+        [INFO] [1721332584.726595]: dist2Wall: 1.505328, distForward: 0.983051, speed: 0.000000, angle: 40.401205
+        [INFO] [1721332584.757912]: dist2Wall: 1.484196, distForward: 0.969251, speed: 0.000000, angle: 41.907413
+        [INFO] [1721332584.795039]: dist2Wall: 1.484196, distForward: 0.969251, speed: 0.000000, angle: 41.907413
+        [INFO] [1721332584.826263]: dist2Wall: 1.490478, distForward: 0.973353, speed: 0.000000, angle: 41.398696
+        [INFO] [1721332584.859496]: dist2Wall: 1.490478, distForward: 0.973353, speed: 0.000000, angle: 41.398696
+        [INFO] [1721332584.892546]: dist2Wall: 1.497642, distForward: 0.978032, speed: 0.000000, angle: 40.888479
+        [INFO] [1721332584.925830]: dist2Wall: 1.497642, distForward: 0.978032, speed: 0.000000, angle: 40.888479
+        [INFO] [1721332584.962375]: dist2Wall: 1.505481, distForward: 0.983151, speed: 0.000000, angle: 40.391984
+        [INFO] [1721332584.993623]: dist2Wall: 1.491641, distForward: 0.974113, speed: 0.000000, angle: 41.311368
+        [INFO] [1721332585.025799]: dist2Wall: 1.491641, distForward: 0.974113, speed: 0.000000, angle: 41.311368
+        [INFO] [1721332585.058002]: dist2Wall: 1.498409, distForward: 0.978533, speed: 0.000000, angle: 40.837368
+        [INFO] [1721332585.092000]: dist2Wall: 1.498409, distForward: 0.978533, speed: 0.000000, angle: 40.837368
+        '''
 
         
         self.cmd_vel_pub.publish(twist)
-        rospy.loginfo("curr-r-turn: %.2f r-block-curr-ticks: %d", math.degrees(self.current_rightTurn), self.right_turn_block_current_tick)
+        # rospy.loginfo("curr-r-turn: %.2f r-block-curr-ticks: %d", math.degrees(self.current_rightTurn), self.right_turn_block_current_tick)
         #rospy.loginfo("ticksBef2ndRun: %d", self._2nd_r_turn_ticks_before)
-        #rospy.loginfo("dist2Wall: %f, distForward: %f, speed: %f, angle: %f", self.distance_right_wall, self.distance_forward, self.calculate_speed(), math.degrees(self.angle_wall_Rlaser))
+        rospy.loginfo("dist2Wall: %f, distForward: %f, speed: %f, angle: %f", self.distance_right_wall, self.distance_forward, self.calculate_speed(), math.degrees(self.angle_wall_Rlaser))
     
     def run(self):
         rospy.spin()
